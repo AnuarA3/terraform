@@ -1,15 +1,3 @@
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "2.16.0"
-    }
-  }
-}
-
-provider "docker" {
-  host = "unix:///var/run/docker.sock"
-}
 #Recurso ALB
 
 resource "aws_alb" "application_load_balancer" {
@@ -23,6 +11,29 @@ resource "aws_alb" "application_load_balancer" {
     Name        = "${var.app_name}-alb"
     Environment = var.app_environment
   }
+}
+
+#
+
+resource "aws_wafv2_web_acl" "web_acl" {
+  name        = "${var.app_name}-${var.app_environment}-web-acl"
+  description = "Web ACL for ALB"
+  scope       = "REGIONAL"
+
+   default_action {
+    allow {}
+  }
+
+  visibility_config {
+      cloudwatch_metrics_enabled = false
+      metric_name                = "friendly-rule-metric-name"
+      sampled_requests_enabled   = false
+    }
+}
+
+resource "aws_wafv2_web_acl_association" "web_acl_association" {
+  resource_arn = aws_alb.application_load_balancer.arn
+  web_acl_arn  = aws_wafv2_web_acl.web_acl.arn
 }
 
 #SECURITY GROUP ALB
@@ -76,6 +87,8 @@ resource "aws_lb_target_group" "target_group" {
   }
 }
 
+#LB LISTENER
+
 resource "aws_lb_listener" "listener" {
   load_balancer_arn = aws_alb.application_load_balancer.arn
   port              = "80"
@@ -127,6 +140,8 @@ resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
   }
 }
 
+#CLOUDWATCH GROUP
+
 resource "aws_cloudwatch_log_group" "log-group" {
   name = "${var.app_name}-${var.app_environment}-logs"
 
@@ -159,7 +174,7 @@ resource "aws_ecs_task_definition" "aws-ecs-task" {
   [
     {
       "name": "${var.app_name}-${var.app_environment}-container",
-      "image": "hello-world:latest",
+      "image": "httpd:latest",
       "entryPoint": [],
       "environment": [
         {
@@ -182,8 +197,8 @@ resource "aws_ecs_task_definition" "aws-ecs-task" {
       },
       "portMappings": [
         {
-          "containerPort": 8080,
-          "hostPort": 8080
+          "containerPort": 80,
+          "hostPort": 80
         }
       ],
       "cpu": 256,
@@ -233,7 +248,7 @@ resource "aws_ecs_service" "aws-ecs-service" {
   load_balancer {
     target_group_arn = aws_lb_target_group.target_group.arn
     container_name   = "${var.app_name}-${var.app_environment}-container"
-    container_port   = 8080
+    container_port   = 80
   }
 
   depends_on = [aws_lb_listener.listener]

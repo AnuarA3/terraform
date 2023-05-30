@@ -2,7 +2,7 @@ data "terraform_remote_state" "infra" {
   backend = "s3"
 
   config = {
-    bucket = "terraform-audistate-anuar"
+    bucket = "assured-toad"
     key    = "infra/cloud.tfstate"
     region = "us-east-1"
   }

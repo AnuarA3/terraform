@@ -9,8 +9,16 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Genera un nombre aleatorio para el bucket
+resource "random_pet" "bucket_name" {
+  length = 2
+  separator = "-"
+}
+
+# Crea el bucket de S3 con el nombre único
+
 resource "aws_s3_bucket" "terraform-state-bucket" {
-  bucket = "terraform-audistate-anuar"
+  bucket = random_pet.bucket_name.id
 
   lifecycle {
     prevent_destroy = false
@@ -18,7 +26,7 @@ resource "aws_s3_bucket" "terraform-state-bucket" {
 }
 
 resource "aws_s3_bucket_versioning" "versioning" {
-  bucket = aws_s3_bucket.terraform-state-bucket.id
+  bucket = random_pet.bucket_name.id
 
     versioning_configuration {
     status = "Enabled"
@@ -26,7 +34,7 @@ resource "aws_s3_bucket_versioning" "versioning" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
-  bucket = aws_s3_bucket.terraform-state-bucket.id
+  bucket = random_pet.bucket_name.id
 
   rule {
     apply_server_side_encryption_by_default {

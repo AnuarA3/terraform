@@ -6,16 +6,17 @@ provider "aws" {
   region     = var.aws_region
 }
 
+
 terraform {
   backend "s3" {
-    bucket = "terraform-audistate-anuar"
-    key    = "infra/cloud.tfstate"
-    region = "us-east-1"
+    bucket         = "assured-toad"
+    key            = "infra/cloud.tfstate"
+    region         = "us-east-1"
     dynamodb_table = "terraform-audilocks-anuar1"
-    encrypt = true
-
+    encrypt        = true
   }
 }
+
 
 module "vpc" {
   source = "../modules/vpc"

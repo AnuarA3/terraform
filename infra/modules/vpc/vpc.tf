@@ -87,10 +87,12 @@ resource "aws_nat_gateway" "nat_gw" {
 }
 
 resource "aws_route_table" "private" {
+  count = length(var.private_subnets)
+  
   vpc_id = aws_vpc.aws-vpc.id
 
   tags = {
-    Name        = "${var.app_name}-routing-table-private"
+    Name        = "${var.app_name}-routing-table-private-${count.index + 1}"
     Environment = var.app_environment
   }
 }
@@ -98,12 +100,12 @@ resource "aws_route_table" "private" {
 resource "aws_route_table_association" "private" {
   count          = length(var.private_subnets)
   subnet_id      = element(aws_subnet.private.*.id, count.index)
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[count.index].id
 }
 
 resource "aws_route" "private" {
   count                  = length(var.private_subnets)
-  route_table_id         = aws_route_table.private.id
+  route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.nat_gw[count.index].id
 }

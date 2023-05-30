@@ -9,7 +9,7 @@ provider "aws" {
 
 terraform {
   backend "s3" {
-    bucket = "terraform-audistate-anuar"
+    bucket = "assured-toad"
     key    = "infra/resources/cloud.tfstate"
     region = "us-east-1"
     dynamodb_table = "terraform-audilocks-anuar1"

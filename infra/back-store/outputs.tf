@@ -7,7 +7,7 @@ output "dynamodb_table_name" {
     description = "The name of the DynamoDB table"
 }
 
-output "s3_bucket_id" {
-    value = aws_s3_bucket.terraform-state-bucket.id
+output "unique_bucket_name" {
+    value = random_pet.bucket_name.id
     description = "ID of the S3 bucket"
 }
