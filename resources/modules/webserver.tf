@@ -13,22 +13,71 @@ resource "aws_alb" "application_load_balancer" {
   }
 }
 
-#
+#WAF
 
 resource "aws_wafv2_web_acl" "web_acl" {
   name        = "${var.app_name}-${var.app_environment}-web-acl"
   description = "Web ACL for ALB"
   scope       = "REGIONAL"
 
-   default_action {
+  default_action {
     allow {}
   }
 
   visibility_config {
-      cloudwatch_metrics_enabled = false
-      metric_name                = "friendly-rule-metric-name"
+    cloudwatch_metrics_enabled = true
+    metric_name                = "web-acl-metric"
+    sampled_requests_enabled   = false
+  }
+
+  rule {
+    name     = "COMMON"
+    priority = 1
+
+    override_action {
+      count {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      
+      }
+    }
+
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "common-rule-metric-name"
       sampled_requests_enabled   = false
     }
+  }
+
+rule {
+    name     = "ANONYMOUS"
+    priority = 2
+
+    override_action {
+      count {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesAnonymousIpList"
+        vendor_name = "AWS"
+        
+      }
+    }
+
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "anonymous-metric-name"
+      sampled_requests_enabled   = false
+    }
+  }
+  
 }
 
 resource "aws_wafv2_web_acl_association" "web_acl_association" {
