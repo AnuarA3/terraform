@@ -13,79 +13,53 @@ resource "aws_alb" "application_load_balancer" {
   }
 }
 
-#WAF
+#Recurso WAF
 
 resource "aws_wafv2_web_acl" "web_acl" {
-  name        = "${var.app_name}-${var.app_environment}-web-acl"
-  description = "Web ACL for ALB"
-  scope       = "REGIONAL"
+  name        = "web-acl"
+  description = "My custom WAF ACL"
+  scope       = "REGIONAL" 
+
+  visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "BlockedRequests"
+      sampled_requests_enabled   = true
+  }
 
   default_action {
     allow {}
   }
 
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "web-acl-metric"
-    sampled_requests_enabled   = false
-  }
-
   rule {
-    name     = "COMMON"
+    name     = "custom-rule"
     priority = 1
 
-    override_action {
-      count {}
+    action {
+      block {}
     }
 
     statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      
+      rate_based_statement {
+        limit           = 100
+        aggregate_key_type   = "IP"
       }
     }
 
-
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "common-rule-metric-name"
-      sampled_requests_enabled   = false
+      metric_name                = "BlockedRequests"
+      sampled_requests_enabled   = true
     }
   }
-
-rule {
-    name     = "ANONYMOUS"
-    priority = 2
-
-    override_action {
-      count {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesAnonymousIpList"
-        vendor_name = "AWS"
-        
-      }
-    }
-
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "anonymous-metric-name"
-      sampled_requests_enabled   = false
-    }
-  }
-  
 }
+
 
 resource "aws_wafv2_web_acl_association" "web_acl_association" {
   resource_arn = aws_alb.application_load_balancer.arn
   web_acl_arn  = aws_wafv2_web_acl.web_acl.arn
 }
 
-#SECURITY GROUP ALB
+#Recurso SECURITY GROUP ALB
 
 resource "aws_security_group" "load_balancer_security_group" {
   vpc_id = data.terraform_remote_state.infra.outputs.vpc_id
@@ -111,7 +85,7 @@ resource "aws_security_group" "load_balancer_security_group" {
   }
 }
 
-#TARGET GROUP
+#Recurso TARGET GROUP
 
 resource "aws_lb_target_group" "target_group" {
   name        = "${var.app_name}-${var.app_environment}-tg"
@@ -136,7 +110,7 @@ resource "aws_lb_target_group" "target_group" {
   }
 }
 
-#LB LISTENER
+#Recurso LB LISTENER
 
 resource "aws_lb_listener" "listener" {
   load_balancer_arn = aws_alb.application_load_balancer.arn
@@ -149,6 +123,8 @@ resource "aws_lb_listener" "listener" {
   }
 }
 
+#Recurso AutoScaling TARGET
+
 resource "aws_appautoscaling_target" "ecs_target" {
   max_capacity       = 2
   min_capacity       = 1
@@ -156,6 +132,8 @@ resource "aws_appautoscaling_target" "ecs_target" {
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
+
+#Recurso POLICY AUTOSCALING
 
 resource "aws_appautoscaling_policy" "ecs_policy_memory" {
   name               = "${var.app_name}-${var.app_environment}-memory-autoscaling"
@@ -200,7 +178,7 @@ resource "aws_cloudwatch_log_group" "log-group" {
   }
 }
 
-#ECS SERVICE AND CLUSTER
+#Recurso ECS SERVICE AND CLUSTER
 
 resource "aws_ecs_cluster" "aws-ecs-cluster" {
   name = "${var.app_name}-${var.app_environment}-cluster"
@@ -214,7 +192,7 @@ data "template_file" "env_vars" {
   template = file("env_vars.json")
 }
 
-#TASK DEFINITION PARA IMAGEN
+#Recurso TASK DEFINITION PARA IMAGEN
 
 resource "aws_ecs_task_definition" "aws-ecs-task" {
   family = "${var.app_name}-task"
@@ -274,7 +252,7 @@ data "aws_ecs_task_definition" "main" {
   task_definition = aws_ecs_task_definition.aws-ecs-task.family
 }
 
-#ECS_SERVICE
+#Recurso ECS_SERVICE
 
 resource "aws_ecs_service" "aws-ecs-service" {
   name                 = "${var.app_name}-${var.app_environment}-ecs-service"
@@ -303,12 +281,11 @@ resource "aws_ecs_service" "aws-ecs-service" {
   depends_on = [aws_lb_listener.listener]
 }
 
-#SECURITY_GROUP_ECS
+#Recurso SECURITY_GROUP_ECS
 
 resource "aws_security_group" "service_security_group" {
   vpc_id = data.terraform_remote_state.infra.outputs.vpc_id
 
-  # Regla de entrada para permitir el tráfico desde el Load Balancer
   ingress {
     from_port       = 0
     to_port         = 0
@@ -316,7 +293,6 @@ resource "aws_security_group" "service_security_group" {
     security_groups = [aws_security_group.load_balancer_security_group.id]
   }
 
-  # Regla de entrada para permitir el tráfico desde la subred privada
   ingress {
     from_port   = 0
     to_port     = 65535
@@ -324,7 +300,6 @@ resource "aws_security_group" "service_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Regla de salida para permitir el tráfico saliente hacia Internet (80/tcp)
   egress {
     from_port       = 80
     to_port         = 80
@@ -345,7 +320,8 @@ resource "aws_security_group" "service_security_group" {
   }
 }
 
-# Recurso de IAM Role para la tarea de ECS
+#Recurso de IAM Role para la tarea de ECS
+
 resource "aws_iam_role" "ecs_task_role" {
   name = "${var.app_name}-ecs-task-role"
 
@@ -365,7 +341,8 @@ resource "aws_iam_role" "ecs_task_role" {
 POLICY
 }
 
-# Recurso de IAM Policy para la tarea de ECS
+#Recurso de IAM Policy para la tarea de ECS
+
 resource "aws_iam_policy" "ecs_task_policy" {
   name        = "${var.app_name}-ecs-task-policy"
   description = "IAM policy for ECS task"
@@ -395,7 +372,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
 POLICY
 }
 
-# Recurso de IAM Role para la ejecución de tarea de ECS
+#Recurso de IAM Role para la ejecución de tarea de ECS
+
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "${var.app_name}-ecs-task-execution-role"
 
@@ -415,7 +393,8 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 POLICY
 }
 
-# Recurso de IAM Policy para la ejecución de tarea de ECS
+#Recurso de IAM Policy para la ejecución de tarea de ECS
+
 resource "aws_iam_policy" "ecs_task_execution_policy" {
   name        = "${var.app_name}-ecs-task-execution-policy"
   description = "IAM policy for ECS task execution"
@@ -458,15 +437,16 @@ resource "aws_iam_policy" "ecs_task_execution_policy" {
 POLICY
 }
 
-# Asociación de la política de ECS task al rol de ECS task
+#Recurso Asociación de la política de ECS task al rol de ECS task
+
 resource "aws_iam_role_policy_attachment" "ecs_task_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_task_policy.arn
   role       = aws_iam_role.ecs_task_role.name
 }
 
-# Asociación de la política de ECS task execution al rol de ECS task execution
+#Recurso Asociación de la política de ECS task execution al rol de ECS task execution
+
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_task_execution_policy.arn
   role       = aws_iam_role.ecs_task_execution_role.name
 }
-
